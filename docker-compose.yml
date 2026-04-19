@@ -1,30 +1,43 @@
 version: '3.9'
 
+# ════════════════════════════════════════════════════════════
+# TenantOS — Docker Compose
+#
+# Default stack (no profile needed):
+#   docker-compose up -d
+#
+# Full dev stack (includes pgAdmin + Redis Commander):
+#   docker-compose --profile dev up -d
+# ════════════════════════════════════════════════════════════
+
 services:
-  # ─── PostgreSQL ───────────────────────────────────────
+
+  # ── PostgreSQL 16 ─────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: tenantOS_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-tenantOS}
-      POSTGRES_USER: ${POSTGRES_USER:-tenantOS_user}
+      POSTGRES_DB:       ${POSTGRES_DB:-tenantOS}
+      POSTGRES_USER:     ${POSTGRES_USER:-tenantOS_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-StrongPassword123!}
-      PGDATA: /var/lib/postgresql/data/pgdata
+      PGDATA:            /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./scripts/migrations/001_add_jobs_and_api_keys.sql:/docker-entrypoint-initdb.d/02-jobs.sql:ro
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tenantOS_user} -d ${POSTGRES_DB:-tenantOS}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
     networks:
       - tenantOS_net
 
-  # ─── Redis ────────────────────────────────────────────
+  # ── Redis 7 ───────────────────────────────────────────────
   redis:
     image: redis:7-alpine
     container_name: tenantOS_redis
@@ -36,10 +49,11 @@ services:
       --maxmemory-policy allkeys-lru
       --appendonly yes
       --appendfsync everysec
+      --save 60 1
     volumes:
       - redis_data:/data
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-RedisPassword123!}", "ping"]
       interval: 10s
@@ -48,7 +62,7 @@ services:
     networks:
       - tenantOS_net
 
-  # ─── Node.js App ──────────────────────────────────────
+  # ── Node.js App ───────────────────────────────────────────
   app:
     build:
       context: .
@@ -56,11 +70,13 @@ services:
       target: development
     container_name: tenantOS_app
     restart: unless-stopped
-    env_file:
-      - .env
+    env_file: .env
     environment:
-      POSTGRES_HOST: postgres
-      REDIS_HOST: redis
+      NODE_ENV:       development
+      POSTGRES_HOST:  postgres
+      POSTGRES_PORT:  "5432"
+      REDIS_HOST:     redis
+      REDIS_PORT:     "6379"
     ports:
       - "${PORT:-3000}:3000"
     volumes:
@@ -71,38 +87,39 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    command: sh -c "node scripts/migrate.js && node scripts/seed.js; npm run dev"
     networks:
       - tenantOS_net
-    command: npm run dev
 
-  # ─── Redis Commander (Dev UI) ─────────────────────────
+  # ── pgAdmin ── (dev profile only) ─────────────────────────
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: tenantOS_pgadmin
+    restart: unless-stopped
+    profiles: [dev]
+    environment:
+      PGADMIN_DEFAULT_EMAIL:    admin@tenantOS.io
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - tenantOS_net
+
+  # ── Redis Commander ── (dev profile only) ─────────────────
   redis-commander:
     image: rediscommander/redis-commander:latest
     container_name: tenantOS_redis_ui
     restart: unless-stopped
-    profiles: ["dev"]
+    profiles: [dev]
     environment:
       REDIS_HOSTS: "local:redis:6379:0:${REDIS_PASSWORD:-RedisPassword123!}"
     ports:
       - "8081:8081"
     depends_on:
       - redis
-    networks:
-      - tenantOS_net
-
-  # ─── pgAdmin (Dev UI) ─────────────────────────────────
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: tenantOS_pgadmin
-    restart: unless-stopped
-    profiles: ["dev"]
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@tenantOS.io
-      PGADMIN_DEFAULT_PASSWORD: admin
-    ports:
-      - "5050:80"
-    depends_on:
-      - postgres
     networks:
       - tenantOS_net
 

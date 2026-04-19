@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TenantOS — Control Plane</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@300;400;500;600&family=Cabinet+Grotesk:wght@500;700;800;900&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#050709;--s1:#0b0e14;--s2:#111620;--s3:#181e2c;
+  --b1:#1a2035;--b2:#222d45;--b3:#2c3a56;
+  --c:#06b6d4;--cg:rgba(6,182,212,.08);--cdim:rgba(6,182,212,.18);
+  --g:#10b981;--a:#f59e0b;--r:#f43f5e;--v:#8b5cf6;
+  --t:#e2e8f0;--m:#64748b;--dim:#334155;
+  --R:10px;--Rs:6px;--Rm:14px;
+  --font:'Geist Mono',monospace;
+  --head:'Cabinet Grotesk',sans-serif;
+  --sb:240px;--th:56px;
+}
+html{scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg);color:var(--t);min-height:100vh;overflow-x:hidden;font-size:13px}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 80% 50% at 50% -10%,rgba(6,182,212,.06),transparent);pointer-events:none;z-index:0}
+
+/* ── LAYOUT ── */
+.app{display:flex;min-height:100vh;position:relative;z-index:1}
+.bd{display:none;position:fixed;inset:0;background:rgba(5,7,9,.8);backdrop-filter:blur(4px);z-index:49}
+.bd.show{display:block}
+
+/* ── SIDEBAR ── */
+.sb{width:var(--sb);background:var(--s1);border-right:1px solid var(--b1);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:50;transition:transform .25s cubic-bezier(.4,0,.2,1);overflow-y:auto}
+.sb-logo{padding:18px 16px;border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.logo{font-family:var(--head);font-weight:900;font-size:18px;display:flex;align-items:center;gap:9px;letter-spacing:-.5px}
+.logo-i{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--c),rgba(6,182,212,.4));display:flex;align-items:center;justify-content:center;font-size:16px}
+.logo em{font-style:normal;color:var(--c)}
+.sb-x{display:none;background:none;border:none;color:var(--m);font-size:20px;cursor:pointer;line-height:1;padding:2px}
+.nav{padding:10px 8px;flex:1}
+.ng{font-size:9px;color:var(--m);letter-spacing:2px;text-transform:uppercase;padding:12px 8px 4px}
+.ni{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:var(--Rs);color:var(--m);cursor:pointer;transition:all .12s;border:1px solid transparent;user-select:none;margin-bottom:1px;line-height:1.3}
+.ni:hover{color:var(--t);background:var(--s2)}
+.ni.on{color:var(--c);background:var(--cg);border-color:var(--cdim)}
+.ni-i{width:16px;text-align:center;font-size:12px;flex-shrink:0}
+.nb{margin-left:auto;font-size:9px;padding:1px 6px;border-radius:8px;background:var(--r);color:#fff;font-weight:600}
+.nb.g{background:var(--g)}.nb.a{background:var(--a);color:#000}
+.sb-foot{padding:12px;border-top:1px solid var(--b1);flex-shrink:0}
+.user-pill{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--Rs);background:var(--s2);border:1px solid var(--b1);cursor:pointer;transition:border-color .12s}
+.user-pill:hover{border-color:var(--b2)}
+.ua{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--c),var(--v));display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;font-family:var(--head);color:#fff;flex-shrink:0}
+.un{font-size:11px;font-weight:500;line-height:1.2}
+.ur{font-size:9px;color:var(--m)}
+.tpick-lbl{font-size:9px;color:var(--m);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;margin-top:10px}
+.tpick{width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--t);font-family:var(--font);font-size:11px;padding:7px 9px;border-radius:var(--Rs);cursor:pointer;outline:none;appearance:none;transition:border-color .12s}
+.tpick:focus{border-color:var(--c)}
+
+/* ── MAIN ── */
+.main{margin-left:var(--sb);flex:1;display:flex;flex-direction:column;min-height:100vh}
+
+/* ── TOPBAR ── */
+.tb{height:var(--th);background:rgba(11,14,20,.92);backdrop-filter:blur(16px);border-bottom:1px solid var(--b1);display:flex;align-items:center;padding:0 20px;gap:10px;position:sticky;top:0;z-index:40}
+.menu-btn{display:none;width:32px;height:32px;background:var(--s2);border:1px solid var(--b1);border-radius:var(--Rs);align-items:center;justify-content:center;cursor:pointer;font-size:15px;color:var(--t);flex-shrink:0}
+.tb-title{font-family:var(--head);font-weight:700;font-size:16px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tb-title em{font-style:normal;color:var(--c)}
+.sse-pill{display:flex;align-items:center;gap:5px;font-size:10px;padding:4px 10px;border-radius:16px;border:1px solid rgba(16,185,129,.2);color:var(--g);background:rgba(16,185,129,.05);white-space:nowrap;flex-shrink:0;cursor:default}
+.sse-pill.off{border-color:rgba(244,63,94,.2);color:var(--r);background:rgba(244,63,94,.05)}
+.dot{width:5px;height:5px;border-radius:50%;background:currentColor;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
+.tb-btn{background:var(--c);border:none;color:#000;font-family:var(--font);font-size:11px;font-weight:600;padding:6px 14px;border-radius:var(--Rs);cursor:pointer;transition:background .12s;white-space:nowrap;flex-shrink:0}
+.tb-btn:hover{background:#22d3ee}
+.tb-btn.ghost{background:var(--s2);border:1px solid var(--b1);color:var(--t);font-weight:400}
+.tb-btn.ghost:hover{border-color:var(--c);color:var(--c)}
+.tb-btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* ── PAGE ── */
+.pg{padding:22px 20px;flex:1}
+
+/* ── STAT CARDS ── */
+.sg{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.sc{background:var(--s1);border:1px solid var(--b1);border-radius:var(--R);padding:16px;position:relative;overflow:hidden;animation:fadeUp .35s ease both}
+.sc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.sc.c1::before{background:var(--c)}.sc.c2::before{background:var(--v)}.sc.c3::before{background:var(--g)}.sc.c4::before{background:var(--a)}
+.sc:nth-child(1){animation-delay:.04s}.sc:nth-child(2){animation-delay:.08s}.sc:nth-child(3){animation-delay:.12s}.sc:nth-child(4){animation-delay:.16s}
+.sc-lbl{font-size:9px;color:var(--m);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+.sc-val{font-family:var(--head);font-weight:800;font-size:28px;line-height:1;letter-spacing:-1px;margin-bottom:6px}
+.sc-sub{font-size:10px;color:var(--g)}.sc-sub.d{color:var(--r)}
+.sc-ghost{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:32px;opacity:.04}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── GRID ── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.g3{display:grid;grid-template-columns:1.8fr 1fr;gap:14px;margin-bottom:14px}
+
+/* ── PANEL ── */
+.panel{background:var(--s1);border:1px solid var(--b1);border-radius:var(--R);overflow:hidden;margin-bottom:14px;animation:fadeUp .35s ease .2s both}
+.ph{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--b1);gap:8px;flex-wrap:wrap}
+.pt{font-family:var(--head);font-weight:700;font-size:13px}
+.ps{font-size:10px;color:var(--m);margin-top:1px}
+.pb{padding:16px}.pb0{padding:0}
+
+/* ── TABLE ── */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--m);text-align:left;padding:0 14px 8px;border-bottom:1px solid var(--b1);white-space:nowrap}
+.tbl td{padding:10px 14px;border-bottom:1px solid rgba(26,32,53,.5);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:rgba(255,255,255,.01);cursor:pointer}
+.tc{display:flex;align-items:center;gap:9px}
+.av{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-family:var(--head);font-weight:800;font-size:10px;flex-shrink:0}
+.tn-name{font-size:11px;font-weight:500}
+.tn-sub{font-size:9px;color:var(--m);margin-top:1px}
+
+/* ── TAGS ── */
+.tag{display:inline-block;font-size:9px;padding:2px 7px;border-radius:4px;white-space:nowrap;letter-spacing:.3px}
+.tag.active  {background:rgba(16,185,129,.1);color:var(--g);border:1px solid rgba(16,185,129,.2)}
+.tag.trial   {background:rgba(245,158,11,.1);color:var(--a);border:1px solid rgba(245,158,11,.2)}
+.tag.suspended{background:rgba(244,63,94,.1);color:var(--r);border:1px solid rgba(244,63,94,.2)}
+.tag.enterprise{background:rgba(139,92,246,.1);color:#a78bfa;border:1px solid rgba(139,92,246,.2)}
+.tag.pro{background:rgba(6,182,212,.08);color:var(--c);border:1px solid rgba(6,182,212,.15)}
+.tag.info{background:rgba(6,182,212,.08);color:var(--c);border:1px solid rgba(6,182,212,.15)}
+.tag.success{background:rgba(16,185,129,.1);color:var(--g);border:1px solid rgba(16,185,129,.2)}
+.tag.warn{background:rgba(245,158,11,.1);color:var(--a);border:1px solid rgba(245,158,11,.2)}
+.tag.error{background:rgba(244,63,94,.1);color:var(--r);border:1px solid rgba(244,63,94,.2)}
+.tag.warning{background:rgba(245,158,11,.1);color:var(--a);border:1px solid rgba(245,158,11,.2)}
+.tag.critical{background:rgba(244,63,94,.15);color:var(--r);border:1px solid rgba(244,63,94,.3)}
+.tag.locked{background:rgba(244,63,94,.1);color:var(--r);border:1px solid rgba(244,63,94,.2)}
+.tag.admin{background:rgba(139,92,246,.1);color:#a78bfa;border:1px solid rgba(139,92,246,.2)}
+.tag.developer{background:rgba(6,182,212,.08);color:var(--c);border:1px solid rgba(6,182,212,.15)}
+.tag.analyst{background:rgba(16,185,129,.1);color:var(--g);border:1px solid rgba(16,185,129,.2)}
+.tag.viewer{background:rgba(100,116,139,.1);color:var(--m);border:1px solid rgba(100,116,139,.2)}
+.tag.superadmin{background:rgba(245,158,11,.15);color:var(--a);border:1px solid rgba(245,158,11,.3)}
+
+/* ── PROGRESS ── */
+.prog{height:4px;background:var(--dim);border-radius:2px;overflow:hidden}
+.pf{height:100%;border-radius:2px;background:var(--c);transition:width .4s ease}
+.pf.w{background:var(--a)}.pf.d{background:var(--r)}
+
+/* ── BUTTONS ── */
+.btn{background:var(--s2);border:1px solid var(--b1);color:var(--t);font-family:var(--font);font-size:10px;padding:5px 10px;border-radius:var(--Rs);cursor:pointer;transition:all .12s;white-space:nowrap}
+.btn:hover{border-color:var(--c);color:var(--c)}
+.btn.pr{background:var(--c);border-color:var(--c);color:#000;font-weight:600}
+.btn.pr:hover{background:#22d3ee}
+.btn.danger:hover{border-color:var(--r);color:var(--r)}
+.btn.success:hover{border-color:var(--g);color:var(--g)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.bgrp{display:flex;gap:5px;flex-wrap:wrap}
+
+/* ── LOG ── */
+.li{display:flex;gap:9px;padding:9px 16px;border-bottom:1px solid rgba(26,32,53,.4);align-items:flex-start;transition:background .08s}
+.li:last-child{border-bottom:none}
+.li:hover{background:rgba(255,255,255,.008)}
+.ldot{width:5px;height:5px;border-radius:50%;margin-top:5px;flex-shrink:0}
+.ldot.info{background:var(--c)}.ldot.warn,.ldot.warning{background:var(--a)}.ldot.error{background:var(--r)}.ldot.success{background:var(--g)}.ldot.critical{background:var(--r)}
+.lt{color:var(--m);font-size:10px;flex-shrink:0;width:56px}
+.lm{flex:1;font-size:11px}
+.ltn{color:var(--c);font-size:10px}
+
+/* ── MINI BARS ── */
+.mbars{display:flex;align-items:flex-end;gap:2px;height:26px;flex-shrink:0}
+.mbar{width:3px;border-radius:1px 1px 0 0;animation:barG .3s ease both;transform-origin:bottom}
+@keyframes barG{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+
+/* ── SKEL ── */
+.skel{background:linear-gradient(90deg,var(--s2) 25%,var(--b1) 50%,var(--s2) 75%);background-size:200%;animation:shim 1.4s infinite;border-radius:4px}
+@keyframes shim{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* ── MODAL ── */
+.mo{position:fixed;inset:0;background:rgba(5,7,9,.85);backdrop-filter:blur(8px);z-index:200;display:none;align-items:center;justify-content:center;padding:20px}
+.mo.open{display:flex}
+.modal{background:var(--s1);border:1px solid var(--b2);border-radius:14px;width:100%;max-width:480px;animation:fadeUp .18s ease;max-height:90vh;overflow-y:auto}
+.mh{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--b1);position:sticky;top:0;background:var(--s1)}
+.mt{font-family:var(--head);font-weight:700;font-size:14px}
+.mx{background:none;border:none;color:var(--m);font-size:20px;cursor:pointer;line-height:1}
+.mx:hover{color:var(--t)}
+.mb{padding:20px}
+.mf{padding:12px 20px;border-top:1px solid var(--b1);display:flex;justify-content:flex-end;gap:8px}
+.fl{margin-bottom:13px}
+.fl label{display:block;font-size:9px;color:var(--m);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+.fi,.fs{width:100%;background:var(--s2);border:1px solid var(--b1);color:var(--t);font-family:var(--font);font-size:12px;padding:8px 11px;border-radius:var(--Rs);outline:none;transition:border-color .12s;appearance:none}
+.fi:focus,.fs:focus{border-color:var(--c)}
+.fs{cursor:pointer}
+
+/* ── TOAST ── */
+.ts{position:fixed;bottom:18px;right:18px;display:flex;flex-direction:column;gap:7px;z-index:300;max-width:calc(100vw - 36px)}
+.toast{background:var(--s1);border:1px solid var(--b1);border-left:3px solid var(--g);border-radius:8px;padding:10px 14px;font-size:11px;display:flex;align-items:center;gap:8px;animation:slideIn .2s ease;min-width:200px}
+.toast.e{border-left-color:var(--r)}.toast.w{border-left-color:var(--a)}.toast.i{border-left-color:var(--c)}
+@keyframes slideIn{from{transform:translateX(24px);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes slideOut{from{transform:translateX(0);opacity:1}to{transform:translateX(24px);opacity:0}}
+
+/* ── LOGIN ── */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:20px}
+.login-box{background:var(--s1);border:1px solid var(--b2);border-radius:16px;width:100%;max-width:400px;padding:36px;animation:fadeUp .3s ease}
+.login-logo{font-family:var(--head);font-size:24px;font-weight:900;margin-bottom:6px;letter-spacing:-.5px}
+.login-logo em{font-style:normal;color:var(--c)}
+.login-sub{font-size:11px;color:var(--m);margin-bottom:28px}
+.login-error{background:rgba(244,63,94,.08);border:1px solid rgba(244,63,94,.2);color:var(--r);border-radius:var(--Rs);padding:9px 12px;font-size:11px;margin-bottom:14px;display:none}
+.login-btn{width:100%;background:var(--c);border:none;color:#000;font-family:var(--font);font-size:13px;font-weight:600;padding:10px;border-radius:var(--Rs);cursor:pointer;transition:background .12s;margin-top:4px}
+.login-btn:hover{background:#22d3ee}
+.login-btn:disabled{opacity:.5;cursor:not-allowed}
+.login-hint{font-size:10px;color:var(--m);margin-top:16px;text-align:center}
+.login-hint strong{color:var(--c)}
+
+/* ── CACHE MINI ── */
+.cmini{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.cm{background:var(--s2);border:1px solid var(--b1);border-radius:var(--Rs);padding:11px}
+.cml{font-size:9px;color:var(--m);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+.cmv{font-family:var(--head);font-weight:700;font-size:20px}
+
+/* ── BAR CHART ── */
+.bchart{display:flex;align-items:flex-end;gap:2px}
+.bbar{flex:1;border-radius:2px 2px 0 0;opacity:.75;animation:barG .35s ease both;transform-origin:bottom}
+
+/* ── QUEUE CARD ── */
+.qcard{background:var(--s1);border:1px solid var(--b1);border-radius:var(--R);padding:13px 15px;display:flex;align-items:center;gap:11px;cursor:pointer;transition:border-color .12s;margin-bottom:9px}
+.qcard:hover{border-color:var(--b2)}
+.qico{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.qi{flex:1;min-width:0}
+.qn{font-size:11px;font-weight:600;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qm{font-size:10px;color:var(--m)}
+.qcnt{font-family:var(--head);font-weight:800;font-size:18px;flex-shrink:0;text-align:right}
+.qrate{font-size:9px;color:var(--m);text-align:right}
+
+/* ── BILLING ── */
+.plan-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.plan-card{background:var(--s2);border:1px solid var(--b1);border-radius:var(--R);padding:16px;transition:border-color .12s;cursor:default}
+.plan-card.current{border-color:var(--c);background:var(--cg)}
+.plan-name{font-family:var(--head);font-weight:800;font-size:15px;margin-bottom:4px}
+.plan-price{font-family:var(--head);font-size:24px;font-weight:900;color:var(--c);letter-spacing:-1px}
+.plan-period{font-size:10px;color:var(--m)}
+.plan-feat{font-size:10px;color:var(--m);margin-top:10px;line-height:1.8}
+.plan-feat span{color:var(--g)}
+
+/* ── RESPONSIVE ── */
+@media(max-width:1100px){
+  .sg{grid-template-columns:repeat(2,1fr)}
+  .g3{grid-template-columns:1fr}
+  .g2{grid-template-columns:1fr}
+  .plan-cards{grid-template-columns:1fr}
+}
+@media(max-width:768px){
+  :root{--sb:260px}
+  .sb{transform:translateX(-100%)}
+  .sb.open{transform:translateX(0)}
+  .sb-x{display:block}
+  .main{margin-left:0}
+  .menu-btn{display:flex}
+  .tb{padding:0 14px;gap:8px}
+  .tb-title{font-size:13px}
+  .sse-pill span:not(.dot){display:none}
+  .pg{padding:16px 12px}
+  .sg{grid-template-columns:1fr 1fr;gap:9px;margin-bottom:14px}
+  .sc-val{font-size:22px}
+  .sc-ghost{display:none}
+  .ph{padding:10px 12px}
+  .mo{align-items:flex-end;padding:0}
+  .modal{border-radius:14px 14px 0 0;max-width:100%;max-height:88vh}
+  .ts{right:10px;bottom:10px}
+  .hm{display:none!important}
+  .mbars{display:none}
+}
+@media(max-width:480px){
+  .sg{grid-template-columns:1fr 1fr}
+  .plan-cards{grid-template-columns:1fr}
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="login-wrap" id="login-view">
+  <div class="login-box">
+    <div class="login-logo">Tenant<em>OS</em></div>
+    <div class="login-sub">Multi-Tenant SaaS Control Plane</div>
+    <div class="login-error" id="login-err"></div>
+    <div class="fl"><label>Tenant ID</label><input class="fi" id="l-tenant" placeholder="a0000001-0000-0000-0000-000000000001" value="a0000001-0000-0000-0000-000000000001"></div>
+    <div class="fl"><label>Email</label><input class="fi" id="l-email" type="email" placeholder="alice@acme-corp.io" value="alice@acme-corp.io"></div>
+    <div class="fl"><label>Password</label><input class="fi" id="l-pass" type="password" placeholder="••••••••" value="AliceAdmin@123"></div>
+    <button class="login-btn" id="login-btn" onclick="doLogin()">Sign In</button>
+    <div class="login-hint">Demo: <strong><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="23424f4a40466342404e460e404c51530d4a4c">[email&#160;protected]</a></strong> / AliceAdmin@123<br>Server: <strong id="api-base-hint">http://localhost:3000/api/v1</strong></div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div class="app" id="app-view" style="display:none">
+  <div class="bd" id="bd" onclick="closeSb()"></div>
+
+  <aside class="sb" id="sb">
+    <div class="sb-logo">
+      <div class="logo"><div class="logo-i">⬡</div>Tenant<em>OS</em></div>
+      <button class="sb-x" onclick="closeSb()">✕</button>
+    </div>
+    <nav class="nav">
+      <div class="ng">Core</div>
+      <div class="ni on" onclick="go('overview')"><span class="ni-i">⊞</span>Overview</div>
+      <div class="ni" onclick="go('tenants')"><span class="ni-i">◈</span>Tenants<span class="nb g" id="nb-t">—</span></div>
+      <div class="ni" onclick="go('users')"><span class="ni-i">●</span>Users</div>
+      <div class="ni" onclick="go('rbac')"><span class="ni-i">◉</span>RBAC</div>
+      <div class="ng">Infrastructure</div>
+      <div class="ni" onclick="go('jobs')"><span class="ni-i">⋯</span>Job Queues<span class="nb a" id="nb-j">—</span></div>
+      <div class="ni" onclick="go('cache')"><span class="ni-i">⚡</span>Redis Cache</div>
+      <div class="ni" onclick="go('webhooks')"><span class="ni-i">⚡</span>Webhooks</div>
+      <div class="ni" onclick="go('apikeys')"><span class="ni-i">⌘</span>API Keys</div>
+      <div class="ng">Monitoring</div>
+      <div class="ni" onclick="go('audit')"><span class="ni-i">≡</span>Audit Logs<span class="nb" id="nb-e">—</span></div>
+      <div class="ni" onclick="go('billing')"><span class="ni-i">◆</span>Billing</div>
+      <div class="ni" onclick="go('security')"><span class="ni-i">⬡</span>Security</div>
+    </nav>
+    <div class="sb-foot">
+      <div class="user-pill" onclick="go('profile')">
+        <div class="ua" id="ua-init">—</div>
+        <div><div class="un" id="ua-name">—</div><div class="ur" id="ua-role">—</div></div>
+      </div>
+      <div class="tpick-lbl">Active Tenant</div>
+      <select class="tpick" id="tpick" onchange="switchT(this.value)">
+        <option value="">Loading...</option>
+      </select>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="tb">
+      <button class="menu-btn" onclick="openSb()">☰</button>
+      <div class="tb-title" id="pgtitle">Infrastructure <em>Overview</em></div>
+      <div class="sse-pill off" id="sse-status"><div class="dot"></div><span>Connecting…</span></div>
+      <button class="tb-btn ghost" id="tb-sec" style="display:none">—</button>
+      <button class="tb-btn" id="tb-pri" onclick="logout()">Sign Out</button>
+    </header>
+    <div class="pg" id="pg"></div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="mo" id="mo">
+  <div class="modal">
+    <div class="mh"><div class="mt" id="mtitle"></div><button class="mx" onclick="closeMo()">✕</button></div>
+    <div class="mb" id="mbody"></div>
+    <div class="mf" id="mfoot"></div>
+  </div>
+</div>
+<div class="ts" id="ts"></div>
+
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+// ════════════════════════════════════════
+// CONFIG
+// ════════════════════════════════════════
+const API = 'http://localhost:3000/api/v1';
+let S = { // State
+  token: null, refresh: null, user: null,
+  tenantId: null, tenants: [], activeTenant: null,
+  cur: 'overview',
+  data: {}, // page cache
+};
+let sse = null;
+
+// ════════════════════════════════════════
+// API LAYER
+// ════════════════════════════════════════
+async function api(path, opts = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(S.token ? { 'Authorization': `Bearer ${S.token}` } : {}),
+    ...(S.tenantId ? { 'X-Tenant-ID': S.tenantId } : {}),
+    ...(opts.headers || {}),
+  };
+  const res = await fetch(`${API}${path}`, { ...opts, headers });
+  if (res.status === 401 && path !== '/auth/login') {
+    await tryRefresh();
+    return api(path, opts); // retry once
+  }
+  const json = await res.json();
+  if (!json.ok) throw Object.assign(new Error(json.error || 'API error'), { status: res.status, code: json.code });
+  return json.data;
+}
+
+async function tryRefresh() {
+  if (!S.refresh) return logout();
+  try {
+    const d = await fetch(`${API}/auth/refresh`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: S.refresh }),
+    }).then(r => r.json());
+    if (d.ok) { S.token = d.data.accessToken; S.refresh = d.data.refreshToken; }
+    else logout();
+  } catch { logout(); }
+}
+
+// ════════════════════════════════════════
+// AUTH
+// ════════════════════════════════════════
+async function doLogin() {
+  const btn = document.getElementById('login-btn');
+  const err = document.getElementById('login-err');
+  const tenantId = document.getElementById('l-tenant').value.trim();
+  const email    = document.getElementById('l-email').value.trim();
+  const pass     = document.getElementById('l-pass').value;
+
+  err.style.display = 'none';
+  btn.disabled = true; btn.textContent = 'Signing in…';
+
+  try {
+    const d = await fetch(`${API}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': tenantId },
+      body: JSON.stringify({ email, password: pass }),
+    }).then(r => r.json());
+
+    if (!d.ok) throw new Error(d.error || 'Login failed');
+
+    S.token   = d.data.accessToken;
+    S.refresh = d.data.refreshToken;
+    S.user    = d.data.user;
+    S.tenantId = tenantId;
+
+    showApp();
+  } catch (e) {
+    err.textContent = e.message;
+    err.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Sign In';
+  }
+}
+
+function showApp() {
+  document.getElementById('login-view').style.display = 'none';
+  document.getElementById('app-view').style.display = 'flex';
+
+  // Update user pill
+  const initials = ((S.user.firstName || S.user.email || '?')[0] + (S.user.lastName || '')[0]).toUpperCase() || '?';
+  document.getElementById('ua-init').textContent = initials;
+  document.getElementById('ua-name').textContent = `${S.user.firstName || ''} ${S.user.lastName || ''}`.trim() || S.user.email;
+  document.getElementById('ua-role').textContent = S.user.role;
+
+  loadTenants().then(() => go('overview'));
+  connectSSE();
+}
+
+async function logout() {
+  try {
+    if (S.token) await fetch(`${API}/auth/logout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${S.token}`, 'X-Tenant-ID': S.tenantId },
+      body: JSON.stringify({ refreshToken: S.refresh }),
+    });
+  } catch {}
+  S = { token: null, refresh: null, user: null, tenantId: null, tenants: [], activeTenant: null, cur: 'overview', data: {} };
+  if (sse) { sse.close(); sse = null; }
+  document.getElementById('app-view').style.display = 'none';
+  document.getElementById('login-view').style.display = 'flex';
+}
+
+// ════════════════════════════════════════
+// SSE - REAL-TIME
+// ════════════════════════════════════════
+function connectSSE() {
+  if (sse) sse.close();
+  const pill = document.getElementById('sse-status');
+
+  try {
+    sse = new EventSource(`${API}/events/stream?token=${S.token}&subscribe=audit.entry,queue.stats,security.token_reuse`);
+
+    sse.onmessage = (e) => {
+      try {
+        const event = JSON.parse(e.data);
+        if (event.type === 'connected') {
+          pill.className = 'sse-pill';
+          pill.innerHTML = '<div class="dot"></div><span>Live</span>';
+        }
+        if (event.type === 'audit.entry') handleLiveAudit(event.entry);
+        if (event.type === 'queue.stats') handleLiveQueues(event.queues);
+        if (event.type === 'security.token_reuse') toast('⚠ Token reuse detected! Session terminated.', 'e');
+      } catch {}
+    };
+
+    sse.onerror = () => {
+      pill.className = 'sse-pill off';
+      pill.innerHTML = '<div class="dot"></div><span>Offline</span>';
+      setTimeout(connectSSE, 5000);
+    };
+  } catch {
+    pill.className = 'sse-pill off';
+    pill.innerHTML = '<div class="dot"></div><span>Offline</span>';
+  }
+}
+
+function handleLiveAudit(entry) {
+  if (!entry) return;
+  const el = document.getElementById('live-log');
+  if (!el) return;
+  const row = `<div class="li">
+    <div class="ldot ${entry.severity||'info'}"></div>
+    <div class="lt">${(entry.createdAt||'').slice(11,19)}</div>
+    <div class="lm">${entry.action||''} <span class="ltn">[${entry.tenantId?.slice(0,8)||'?'}]</span></div>
+  </div>`;
+  el.insertAdjacentHTML('afterbegin', row);
+  // keep max 8 rows
+  while (el.children.length > 8) el.lastChild.remove();
+  const nb = document.getElementById('nb-e');
+  if (nb && entry.severity === 'error') nb.textContent = parseInt(nb.textContent || '0') + 1;
+}
+
+function handleLiveQueues(queues) {
+  if (!Array.isArray(queues)) return;
+  const failed = queues.reduce((a, q) => a + (q.failed || 0), 0);
+  const nb = document.getElementById('nb-j');
+  if (nb) nb.textContent = failed || queues.reduce((a, q) => a + (q.waiting || 0), 0);
+}
+
+// ════════════════════════════════════════
+// SIDEBAR + ROUTING
+// ════════════════════════════════════════
+function openSb() { document.getElementById('sb').classList.add('open'); document.getElementById('bd').classList.add('show'); document.body.style.overflow = 'hidden'; }
+function closeSb() { document.getElementById('sb').classList.remove('open'); document.getElementById('bd').classList.remove('show'); document.body.style.overflow = ''; }
+
+const TITLES = {
+  overview:'Infrastructure <em>Overview</em>', tenants:'Tenant <em>Management</em>',
+  users:'User <em>Management</em>', rbac:'Role-Based <em>Access</em>',
+  jobs:'Job <em>Queues</em>', cache:'Redis <em>Cache</em>',
+  webhooks:'Webhook <em>Endpoints</em>', apikeys:'API <em>Keys</em>',
+  audit:'Audit <em>Logs</em>', billing:'Plan &amp; <em>Billing</em>',
+  security:'Security <em>Center</em>', profile:'My <em>Profile</em>',
+};
+const ACTIONS = {
+  overview: ['+ New Tenant', openNewTenant],
+  tenants:  ['+ Provision', openNewTenant],
+  users:    ['+ Invite User', openInviteUser],
+  jobs:     ['Retry Failed', retryFailed],
+  cache:    ['Flush Cache', flushCache],
+  audit:    ['Export CSV', exportAudit],
+  apikeys:  ['+ New Key', openNewApiKey],
+  webhooks: ['+ Register', openNewWebhook],
+  billing:  ['Generate Invoice', genInvoice],
+  security: ['Refresh', () => go('security')],
+  rbac:     ['Check Permission', openRbacCheck],
+  profile:  ['Change Password', openChangePass],
+};
+
+async function go(p) {
+  S.cur = p; closeSb();
+  document.querySelectorAll('.ni').forEach(el => el.classList.toggle('on', (el.getAttribute('onclick') || '').includes(`'${p}'`)));
+  document.getElementById('pgtitle').innerHTML = TITLES[p] || p;
+
+  const [label, fn] = ACTIONS[p] || ['Refresh', () => go(p)];
+  const pb = document.getElementById('tb-pri');
+  pb.textContent = label; pb.onclick = fn;
+  document.getElementById('tb-sec').style.display = (p === 'audit') ? '' : 'none';
+  if (p === 'audit') { document.getElementById('tb-sec').textContent = 'Export'; document.getElementById('tb-sec').onclick = exportAudit; }
+
+  document.getElementById('pg').innerHTML = skeleton();
+  const r = { overview: renderOverview, tenants: renderTenants, users: renderUsers, rbac: renderRBAC, jobs: renderJobs, cache: renderCache, webhooks: renderWebhooks, apikeys: renderApiKeys, audit: renderAudit, billing: renderBilling, security: renderSecurity, profile: renderProfile };
+  try { document.getElementById('pg').innerHTML = await (r[p] || renderOverview)(); }
+  catch (e) { document.getElementById('pg').innerHTML = errPage(e.message); }
+  window.scrollTo(0, 0);
+}
+
+function skeleton() {
+  return `<div class="sg">${[...Array(4)].map(() => `<div class="sc c1"><div class="skel" style="height:10px;width:55%;margin-bottom:14px"></div><div class="skel" style="height:24px;width:40%;margin-bottom:8px"></div><div class="skel" style="height:10px;width:50%"></div></div>`).join('')}</div><div class="panel"><div class="pb"><div class="skel" style="height:160px"></div></div></div>`;
+}
+function errPage(msg) { return `<div style="padding:40px;text-align:center;color:var(--m)"><div style="font-size:32px;margin-bottom:12px">⚠</div><div style="color:var(--r);margin-bottom:8px">${msg}</div><button class="btn" onclick="go(S.cur)">Retry</button></div>`; }
+
+async function switchT(v) {
+  S.tenantId = v;
+  S.activeTenant = S.tenants.find(t => t.id === v);
+  toast(`Tenant: ${S.activeTenant?.name || v}`, 'i');
+  if (S.cur === 'overview') go('overview');
+}
+
+async function loadTenants() {
+  try {
+    const d = await api('/tenants?limit=50');
+    S.tenants = d.tenants;
+    const p = document.getElementById('tpick');
+    p.innerHTML = S.tenants.map(t => `<option value="${t.id}" ${t.id === S.tenantId ? 'selected' : ''}>${t.name}</option>`).join('');
+    S.activeTenant = S.tenants.find(t => t.id === S.tenantId) || S.tenants[0];
+    if (!S.tenantId && S.tenants[0]) S.tenantId = S.tenants[0].id;
+    document.getElementById('nb-t').textContent = S.tenants.filter(t => t.status === 'active').length;
+  } catch { /* continue */ }
+}
+
+// ════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════
+const rnd = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
+const pct = q => q > 85 ? 'd' : q > 60 ? 'w' : '';
+const fmt = n => (n || 0).toLocaleString();
+const ago = ts => { if (!ts) return '—'; const s = Math.floor((Date.now() - new Date(ts)) / 1000); if (s < 60) return `${s}s ago`; if (s < 3600) return `${Math.floor(s/60)}m ago`; if (s < 86400) return `${Math.floor(s/3600)}h ago`; return `${Math.floor(s/86400)}d ago`; };
+const QMETA = {'email-notifications':{e:'✉',c:'rgba(6,182,212,.1)',a:'#06b6d4'},'report-generation':{e:'📊',c:'rgba(139,92,246,.1)',a:'#8b5cf6'},'data-sync':{e:'⟳',c:'rgba(16,185,129,.1)',a:'#10b981'},'webhook-dispatch':{e:'⚡',c:'rgba(245,158,11,.1)',a:'#f59e0b'},'invoice-processing':{e:'💳',c:'rgba(244,63,94,.1)',a:'#f43f5e'}};
+function miniB(n, accent, di = 0) { return Array.from({length:n}, (_, i) => `<div class="mbar" style="height:${rnd(15,100)}%;background:${accent};opacity:.7;animation-delay:${di+i*.03}s"></div>`).join(''); }
+function logRows(logs) { return (logs||[]).map(l => `<div class="li"><div class="ldot ${l.type||l.severity||'info'}"></div><div class="lt">${(l.time||l.created_at||l.timestamp||'').slice(11,19)||'—'}</div><div class="lm">${l.action||l.message||l.m||'—'} <span class="ltn">[${(l.tenantId||l.tenant_id||l.tn||'').slice(0,8)||'—'}]</span></div><span class="tag ${l.severity||l.type||'info'}">${l.severity||l.type||'—'}</span></div>`).join(''); }
+function sc(cls, lbl, val, sub, down, ico) { return `<div class="sc ${cls}"><div class="sc-lbl">${lbl}</div><div class="sc-val">${val}</div><div class="sc-sub${down?' d':''}">${sub}</div><div class="sc-ghost">${ico}</div></div>`; }
+
+// ════════════════════════════════════════
+// PAGE RENDERS
+// ════════════════════════════════════════
+
+async function renderOverview() {
+  const [ov, audit, queues, cache] = await Promise.all([
+    api('/overview').catch(() => ({})),
+    api('/audit?limit=8').catch(() => ({ logs: [] })),
+    api('/jobs/queues').catch(() => ({ queues: [] })),
+    api('/cache/stats').catch(() => ({ redis: {} })),
+  ]);
+
+  const t  = ov.tenants || {};
+  const sec = ov.security || {};
+  const qs  = (queues.queues || ov.queues || []);
+  const cr  = cache.redis || ov.cache || {};
+  const logs = audit.logs || [];
+
+  return `
+  <div class="sg">
+    ${sc('c1','Active Tenants',   t.active||'—',        '↑ this month', false,'◈')}
+    ${sc('c2','Failed Logins',    sec.failedLogins||'0', 'last 7 days',  sec.failedLogins > 10,'⬡')}
+    ${sc('c3','Queue Jobs',       qs.reduce((a,q)=>a+(q.waiting||0),0), 'waiting',false,'⋯')}
+    ${sc('c4','Cache Hit Rate',   cr.hitRate||'—',       'Redis',         false,'⚡')}
+  </div>
+  <div class="g3">
+    <div class="panel">
+      <div class="ph"><div><div class="pt">Tenant Overview</div><div class="ps">${S.tenants.length} tenants</div></div><button class="btn" onclick="go('tenants')">All →</button></div>
+      <div class="pb0"><div class="tw"><table class="tbl">
+        <thead><tr><th>Tenant</th><th>Status</th><th class="hm">Plan</th><th class="hm">Users</th><th class="hm">Quota</th></tr></thead>
+        <tbody>${S.tenants.slice(0,6).map(t => `<tr onclick="go('tenants')">
+          <td><div class="tc"><div class="av" style="background:rgba(6,182,212,.1);color:var(--c)">${(t.name||'?').slice(0,2).toUpperCase()}</div><div><div class="tn-name">${t.name}</div><div class="tn-sub">${t.region||'—'}</div></div></div></td>
+          <td><span class="tag ${t.status}">${t.status}</span></td>
+          <td class="hm"><span class="tag ${t.plan}">${t.plan}</span></td>
+          <td class="hm" style="color:var(--m)">${t.user_count||0}</td>
+          <td class="hm"><div style="display:flex;align-items:center;gap:6px"><div class="prog" style="width:64px"><div class="pf ${pct(0)}" style="width:0%"></div></div><span style="font-size:9px;color:var(--m)">—</span></div></td>
+        </tr>`).join('')}</tbody>
+      </table></div></div>
+    </div>
+    <div>
+      <div class="panel">
+        <div class="ph"><div class="pt">Cache Health</div><button class="btn" onclick="go('cache')">→</button></div>
+        <div class="pb">
+          <div class="cmini">
+            <div class="cm"><div class="cml">Hit Rate</div><div class="cmv" style="color:var(--g)">${cr.hitRate||'—'}</div></div>
+            <div class="cm"><div class="cml">Memory</div><div class="cmv" style="color:var(--c)">${cr.memory||'—'}</div></div>
+            <div class="cm"><div class="cml">Keys</div><div class="cmv" style="color:var(--v)">${cr.totalKeys||'—'}</div></div>
+            <div class="cm"><div class="cml">Latency</div><div class="cmv" style="color:var(--a)">${cr.latency||'—'}<span style="font-size:11px">ms</span></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="ph"><div class="pt">Live Queues</div><button class="btn" onclick="go('jobs')">→</button></div>
+        <div class="pb" style="padding:10px">
+          ${qs.slice(0,4).map(q => { const m=QMETA[q.name]||{e:'⬡',a:'#06b6d4'}; return `<div style="display:flex;justify-content:space-between;padding:7px 8px;border-radius:5px">${m.e} <span style="color:var(--m);font-size:10px;flex:1;margin-left:8px">${q.name?.replace(/-/g,' ')}</span><span style="color:${m.a};font-size:11px">${q.waiting||0}</span> <span style="color:${(q.failed||0)>0?'var(--r)':'var(--m)'};font-size:10px;margin-left:8px">${q.failed||0}err</span></div>`; }).join('')}
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="ph"><div class="pt">Live Audit Log</div><div class="sse-pill" style="display:flex"><div class="dot"></div>Live</div></div>
+    <div id="live-log">${logRows(logs)}</div>
+  </div>`;
+}
+
+async function renderTenants() {
+  const d = await api('/tenants?limit=50');
+  return `
+  <div class="panel">
+    <div class="ph"><div><div class="pt">All Tenants</div><div class="ps">${d.total} total • isolated schemas</div></div></div>
+    <div class="pb0"><div class="tw"><table class="tbl">
+      <thead><tr><th>Tenant</th><th>Plan</th><th>Status</th><th class="hm">Rate Limit</th><th class="hm">Users</th><th class="hm">Region</th><th>Actions</th></tr></thead>
+      <tbody>${d.tenants.map(t => `<tr>
+        <td><div class="tc"><div class="av" style="background:rgba(6,182,212,.1);color:var(--c)">${(t.name||'').slice(0,2).toUpperCase()}</div><div><div class="tn-name">${t.name}</div><div class="tn-sub">${t.slug||t.id?.slice(0,8)}</div></div></div></td>
+        <td><span class="tag ${t.plan}">${t.plan}</span></td>
+        <td><span class="tag ${t.status}">${t.status}</span></td>
+        <td class="hm" style="color:var(--c)">${fmt(t.rate_limit)}/min</td>
+        <td class="hm" style="color:var(--m)">${t.user_count||0}/${t.max_users}</td>
+        <td class="hm" style="font-size:10px;color:var(--m)">${t.region||'—'}</td>
+        <td><div class="bgrp">
+          <button class="btn" onclick="showTenant('${t.id}')">View</button>
+          ${t.status!=='suspended'?`<button class="btn danger" onclick="suspendTenant('${t.id}')">Suspend</button>`:`<button class="btn success" onclick="reactivateTenant('${t.id}')">Reactivate</button>`}
+        </div></td>
+      </tr>`).join('')}</tbody>
+    </table></div></div>
+  </div>`;
+}
+
+async function renderUsers() {
+  const d = await api('/users');
+  return `
+  <div class="panel">
+    <div class="ph"><div><div class="pt">Users</div><div class="ps">${d.total} in tenant</div></div></div>
+    <div class="pb0"><div class="tw"><table class="tbl">
+      <thead><tr><th>User</th><th>Role</th><th>Status</th><th class="hm">MFA</th><th class="hm">Last Login</th><th>Actions</th></tr></thead>
+      <tbody>${d.users.map(u => `<tr>
+        <td><div class="tc"><div class="av" style="background:rgba(139,92,246,.1);color:var(--v)">${((u.first_name||u.email||'?')[0]+(u.last_name||'')[0]).toUpperCase()||'?'}</div><div><div class="tn-name">${u.email}</div><div class="tn-sub">${u.first_name||''} ${u.last_name||''}</div></div></div></td>
+        <td><span class="tag ${u.role}">${u.role}</span></td>
+        <td><span class="tag ${u.status}">${u.status}</span></td>
+        <td class="hm"><span class="tag ${u.mfa_enabled?'success':'trial'}">${u.mfa_enabled?'ON':'OFF'}</span></td>
+        <td class="hm" style="font-size:10px;color:var(--m)">${ago(u.last_login_at)}</td>
+        <td><div class="bgrp">
+          <button class="btn" onclick="showUser('${u.id}','${u.email}','${u.role}','${u.status}')">Edit</button>
+          ${u.status==='locked'?`<button class="btn success" onclick="unlockUser('${u.id}')">Unlock</button>`:''}
+          ${u.id!==S.user?.id?`<button class="btn danger" onclick="deleteUser('${u.id}','${u.email}')">Delete</button>`:''}
+        </div></td>
+      </tr>`).join('')}</tbody>
+    </table></div></div>
+  </div>`;
+}
+
+async function renderRBAC() {
+  const [matrix, perms] = await Promise.all([api('/rbac/matrix'), api('/rbac/permissions')]);
+  const roles = ['superadmin','admin','developer','analyst','viewer'];
+  return `
+  <div class="panel">
+    <div class="ph"><div class="pt">Role Permission Matrix</div></div>
+    <div class="pb0"><div class="tw"><table class="tbl">
+      <thead><tr><th>Permission</th>${roles.map(r=>`<th style="text-align:center"><span class="tag ${r}">${r}</span></th>`).join('')}</tr></thead>
+      <tbody>${(perms.permissions||[]).map(p => `<tr>
+        <td style="color:var(--m);font-size:10px">${p.resource}:${p.action}</td>
+        ${roles.map(r => { const has=(matrix.matrix||{})[r]||[]; const ok=has.includes('*')||has.includes(`${p.resource}:${p.action}`); return `<td style="text-align:center;color:${ok?'var(--g)':'var(--b3)'};font-size:14px">${ok?'✓':'○'}</td>`; }).join('')}
+      </tr>`).join('')}</tbody>
+    </table></div></div>
+  </div>`;
+}
+
+async function renderJobs() {
+  const d = await api('/jobs/queues');
+  const qs = d.queues || [];
+  const tw = qs.reduce((a,q)=>a+(q.waiting||0),0), tf = qs.reduce((a,q)=>a+(q.failed||0),0), tc = qs.reduce((a,q)=>a+(q.completed||0),0);
+  return `
+  <div class="sg">
+    ${sc('c1','Waiting',tw,'jobs in queue',false,'⋯')}
+    ${sc('c3','Active',qs.reduce((a,q)=>a+(q.active||0),0),'workers running',false,'⚙')}
+    ${sc('c4','Failed',tf,tf>0?'needs retry':'all clear',tf>0,'⚠')}
+    ${sc('c2','Completed',tc,'total processed',false,'✓')}
+  </div>
+  ${qs.map((q,i)=>{const m=QMETA[q.name]||{e:'⬡',c:'rgba(6,182,212,.1)',a:'#06b6d4'};return`<div class="qcard" onclick="enqueueJob('${q.name}')">
+    <div class="qico" style="background:${m.c};color:${m.a}">${m.e}</div>
+    <div class="qi"><div class="qn">${q.name}</div><div class="qm">${q.active||0} active • ${q.completed||0} done • <span style="color:${(q.failed||0)>0?'var(--r)':'var(--g)'}">${q.failed||0} failed</span></div></div>
+    <div class="mbars">${miniB(14,m.a,i*.04)}</div>
+    <div><div class="qcnt" style="color:${m.a}">${q.waiting||0}</div><div class="qrate">waiting</div></div>
+  </div>`;}).join('')}`;
+}
+
+async function renderCache() {
+  const d = await api('/cache/stats');
+  const r = d.redis || {};
+  const bars = Array.from({length:24},()=>rnd(55,98));
+  return `
+  <div class="sg">
+    ${sc('c3','Hit Rate',    r.hitRate||'—',       'from Redis', false,'⚡')}
+    ${sc('c1','Memory',      r.memory||'—',         'in use',     false,'◉')}
+    ${sc('c2','Total Keys',  r.totalKeys||'—',      'all tenants',false,'⬡')}
+    ${sc('c4','Latency',     (r.latency||0)+'ms',   'ping',       false,'↻')}
+  </div>
+  <div class="panel">
+    <div class="ph"><div class="pt">Hit/Miss Rate (24h — live pattern)</div></div>
+    <div class="pb">
+      <div class="bchart" style="height:100px;margin-bottom:10px">
+        ${bars.map((h,i)=>`<div style="flex:1;display:flex;flex-direction:column;gap:2px;height:100%;justify-content:flex-end">
+          <div class="bbar" style="height:${100-h}%;background:rgba(244,63,94,.3);animation-delay:${i*.02}s"></div>
+          <div class="bbar" style="height:${h}%;background:var(--g);animation-delay:${i*.02}s"></div>
+        </div>`).join('')}
+      </div>
+      <div style="display:flex;gap:14px;font-size:10px;color:var(--m)">
+        <div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:2px;background:var(--g)"></div>Hit</div>
+        <div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:2px;background:rgba(244,63,94,.4)"></div>Miss</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function renderAudit() {
+  const d = await api('/audit?limit=50');
+  return `
+  <div class="panel">
+    <div class="ph">
+      <div><div class="pt">Event Stream</div><div class="ps">${d.total} total events</div></div>
+      <div class="bgrp">
+        <button class="btn" style="font-size:9px" onclick="filterAudit('success')">✓ Success</button>
+        <button class="btn" style="font-size:9px" onclick="filterAudit('warn')">⚠ Warn</button>
+        <button class="btn" style="font-size:9px" onclick="filterAudit('error')">✕ Error</button>
+        <button class="btn" style="font-size:9px" onclick="filterAudit('critical')">☠ Critical</button>
+        <button class="btn" style="font-size:9px" onclick="filterAudit('all')">All</button>
+      </div>
+    </div>
+    <div id="audit-list">${(d.logs||[]).map(l=>`<div class="li" data-sev="${l.severity}">
+      <div class="ldot ${l.severity||'info'}"></div>
+      <div class="lt">${(l.created_at||'').slice(11,19)}</div>
+      <div class="lm">${l.action||'—'} ${l.resource?`<span style="color:var(--m)"> · ${l.resource}</span>`:''} <span class="ltn">[${(l.tenant_id||'').slice(0,8)||'sys'}]</span></div>
+      <span class="tag ${l.severity}">${l.severity}</span>
+    </div>`).join('')}</div>
+  </div>`;
+}
+
+async function renderBilling() {
+  const [summary, plans] = await Promise.all([
+    api('/billing/summary').catch(() => ({})),
+    api('/billing/plans').catch(() => ({ plans: [] })),
+  ]);
+  const q = summary.quotas || {};
+  return `
+  <div class="plan-cards">
+    ${(plans.plans||[]).map(p=>`<div class="plan-card${p.id===summary.plan?' current':''}">
+      <div class="plan-name">${p.name}${p.id===summary.plan?' <span style="font-size:10px;color:var(--c)">current</span>':''}</div>
+      <div class="plan-price">$${p.price}<span class="plan-period">/mo</span></div>
+      <div class="plan-feat">
+        <div><span>✓</span> ${fmt(p.rateLimit)} req/min</div>
+        <div><span>✓</span> ${p.maxUsers} users</div>
+        <div><span>✓</span> ${p.maxApiKeys} API keys</div>
+        <div><span>✓</span> ${p.retentionDays}d audit retention</div>
+        <div style="color:var(--m)">${p.support} support</div>
+      </div>
+    </div>`).join('')}
+  </div>
+  <div class="g2">
+    <div class="panel">
+      <div class="ph"><div class="pt">Quota Usage</div></div>
+      <div class="pb">
+        ${Object.entries({Users:q.users,ApiKeys:q.apiKeys,Webhooks:q.webhooks}).map(([k,v])=>v?`<div style="margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+            <span style="font-size:11px">${k}</span>
+            <span style="font-size:10px;color:var(--m)">${v.current||0} / ${v.max||'—'}</span>
+          </div>
+          <div class="prog"><div class="pf ${pct(v.utilization||0)}" style="width:${Math.min(v.utilization||0,100)}%"></div></div>
+        </div>`:'')}
+      </div>
+    </div>
+    <div class="panel">
+      <div class="ph"><div class="pt">Billing</div></div>
+      <div class="pb">
+        <div class="cmini">
+          <div class="cm"><div class="cml">Plan</div><div class="cmv" style="color:var(--c)">${summary.plan||'—'}</div></div>
+          <div class="cm"><div class="cml">Est. Amount</div><div class="cmv" style="color:var(--g)">$${summary.billing?.estimatedAmount||'—'}</div></div>
+          <div class="cm"><div class="cml">Next Invoice</div><div class="cmv" style="font-size:13px">${summary.billing?.nextInvoiceDate||'—'}</div></div>
+          <div class="cm"><div class="cml">Requests</div><div class="cmv">${fmt(summary.usage?.totalRequests)}</div></div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function renderSecurity() {
+  const [summary, loginStats] = await Promise.all([
+    api('/audit/summary?days=7').catch(()=>({summary:{}})),
+    api('/audit?type=auth&limit=20').catch(()=>({logs:[]})),
+  ]);
+  const s = summary.summary || {};
+  return `
+  <div class="sg">
+    ${sc('c3','Successful Logins', s.successLogins||0,   'last 7 days',  false,'✓')}
+    ${sc('c4','Failed Logins',     s.failedLogins||0,    'last 7 days',  s.failedLogins>5,'✗')}
+    ${sc('c1','Critical Events',   s.criticalEvents||0,  'last 7 days',  s.criticalEvents>0,'☠')}
+    ${sc('c2','Token Reuse',       s.tokenReuseEvents||0,'replay attacks',s.tokenReuseEvents>0,'⚠')}
+  </div>
+  <div class="g2">
+    <div class="panel">
+      <div class="ph"><div class="pt">Recent Auth Events</div></div>
+      <div>${logRows(loginStats.logs||[])}</div>
+    </div>
+    <div class="panel">
+      <div class="ph"><div class="pt">Security Checks</div></div>
+      <div class="pb">
+        ${[['Brute Force Protection','Active — 5 attempts → 15min lockout','success'],
+           ['IP Rate Limiting','Active — 20 attempts → 15min block','success'],
+           ['Token Rotation','Active — replay detection + family revoke','success'],
+           ['Token Blacklist','Active — Redis-backed JTI tracking','success'],
+           ['MFA Available','TOTP + backup codes (RFC 6238)','info'],
+           ['Audit Log','Immutable — PostgreSQL + CloudWatch','success']].map(([k,v,t])=>`
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--b1)">
+            <div><div style="font-size:11px">${k}</div><div style="font-size:10px;color:var(--m)">${v}</div></div>
+            <span class="tag ${t}">ON</span>
+          </div>`).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+
+async function renderWebhooks() {
+  const [endpoints, events] = await Promise.all([api('/webhooks'), api('/webhooks/events')]);
+  return `
+  <div class="panel">
+    <div class="ph"><div><div class="pt">Endpoints</div><div class="ps">${(endpoints.endpoints||[]).length} registered</div></div></div>
+    <div class="pb0"><div class="tw"><table class="tbl">
+      <thead><tr><th>URL</th><th>Events</th><th>Status</th><th class="hm">Last Success</th><th>Actions</th></tr></thead>
+      <tbody>${(endpoints.endpoints||[]).length?endpoints.endpoints.map(e=>`<tr>
+        <td style="color:var(--c);font-size:10px;max-width:200px;overflow:hidden;text-overflow:ellipsis">${e.url}</td>
+        <td style="font-size:9px;color:var(--m)">${(e.events||[]).join(', ')}</td>
+        <td><span class="tag ${e.is_active?'active':'suspended'}">${e.is_active?'active':'paused'}</span></td>
+        <td class="hm" style="font-size:10px;color:var(--m)">${ago(e.last_success_at)}</td>
+        <td><div class="bgrp">
+          <button class="btn" onclick="testWebhook('${e.id}')">Test</button>
+          <button class="btn danger" onclick="deleteWebhook('${e.id}')">Delete</button>
+        </div></td>
+      </tr>`).join(''):
+      '<tr><td colspan="5" style="text-align:center;color:var(--m);padding:24px">No endpoints registered yet</td></tr>'}</tbody>
+    </table></div></div>
+  </div>
+  <div class="panel">
+    <div class="ph"><div class="pt">Available Event Types</div></div>
+    <div class="pb"><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px">
+      ${Object.entries(events.events||{}).map(([k,v])=>`<div style="background:var(--s2);border:1px solid var(--b1);border-radius:5px;padding:8px 10px"><div style="font-size:10px;color:var(--c)">${k}</div><div style="font-size:9px;color:var(--m);margin-top:2px">${v}</div></div>`).join('')}
+    </div></div>
+  </div>`;
+}
+
+async function renderApiKeys() {
+  const d = await api('/api-keys');
+  return `
+  <div class="panel">
+    <div class="ph"><div><div class="pt">API Keys</div><div class="ps">${(d.keys||[]).length} active</div></div></div>
+    <div class="pb0"><div class="tw"><table class="tbl">
+      <thead><tr><th>Name</th><th>Prefix</th><th>Permissions</th><th class="hm">Last Used</th><th class="hm">Expires</th><th>Actions</th></tr></thead>
+      <tbody>${(d.keys||[]).length?d.keys.map(k=>`<tr>
+        <td style="font-weight:500">${k.name}</td>
+        <td style="font-size:10px;color:var(--c);font-family:var(--font)">${k.key_prefix}…</td>
+        <td style="font-size:9px;color:var(--m)">${(k.permissions||[]).join(', ')||'all'}</td>
+        <td class="hm" style="font-size:10px;color:var(--m)">${ago(k.last_used_at)}</td>
+        <td class="hm" style="font-size:10px;color:var(--m)">${k.expires_at?k.expires_at.slice(0,10):'never'}</td>
+        <td><div class="bgrp">
+          <button class="btn" onclick="rotateKey('${k.id}')">Rotate</button>
+          <button class="btn danger" onclick="revokeKey('${k.id}')">Revoke</button>
+        </div></td>
+      </tr>`).join(''):
+      '<tr><td colspan="6" style="text-align:center;color:var(--m);padding:24px">No API keys yet</td></tr>'}</tbody>
+    </table></div></div>
+  </div>`;
+}
+
+async function renderProfile() {
+  const me = await api('/auth/me');
+  const u = me;
+  return `
+  <div class="g2">
+    <div class="panel">
+      <div class="ph"><div class="pt">Profile</div></div>
+      <div class="pb">
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
+          <div class="av" style="width:52px;height:52px;border-radius:12px;background:linear-gradient(135deg,var(--c),var(--v));font-size:18px;color:#fff">${((u.firstName||u.email||'?')[0]+(u.lastName||'')[0]).toUpperCase()}</div>
+          <div><div style="font-family:var(--head);font-size:18px;font-weight:800">${u.firstName||''} ${u.lastName||''}</div><div style="color:var(--m);font-size:11px">${u.email}</div></div>
+        </div>
+        <div class="cmini">
+          <div class="cm"><div class="cml">Role</div><div style="margin-top:4px"><span class="tag ${u.role}">${u.role}</span></div></div>
+          <div class="cm"><div class="cml">Status</div><div style="margin-top:4px"><span class="tag ${u.status}">${u.status}</span></div></div>
+          <div class="cm"><div class="cml">MFA</div><div style="margin-top:4px"><span class="tag ${u.mfaEnabled?'success':'trial'}">${u.mfaEnabled?'Enabled':'Disabled'}</span></div></div>
+          <div class="cm"><div class="cml">Last Login</div><div style="font-size:11px;margin-top:4px">${ago(u.lastLoginAt)}</div></div>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:8px">
+          <button class="btn pr" onclick="openChangePass()">Change Password</button>
+          ${!u.mfaEnabled?`<button class="btn" onclick="setupMFA()">Enable MFA</button>`:`<button class="btn danger" onclick="toast('Disable MFA in settings','w')">Disable MFA</button>`}
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="ph"><div class="pt">Tenant</div></div>
+      <div class="pb">
+        <div class="cmini">
+          <div class="cm"><div class="cml">Name</div><div style="font-size:12px;margin-top:4px">${u.tenant?.name||'—'}</div></div>
+          <div class="cm"><div class="cml">Plan</div><div style="margin-top:4px"><span class="tag ${u.tenant?.plan}">${u.tenant?.plan||'—'}</span></div></div>
+        </div>
+        <div style="margin-top:14px">
+          <button class="btn" onclick="logout()">Sign Out</button>
+          <button class="btn" onclick="logoutAll()" style="margin-left:6px">Sign Out All Devices</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ════════════════════════════════════════
+// ACTIONS
+// ════════════════════════════════════════
+function filterAudit(type) {
+  document.querySelectorAll('#audit-list .li').forEach(el => {
+    el.style.display = type === 'all' || el.dataset.sev === type ? '' : 'none';
+  });
+}
+
+async function showTenant(id) {
+  const d = await api(`/tenants/${id}`);
+  const t = d.tenant;
+  openMo(t.name, `
+    <div class="cmini" style="margin-bottom:14px">
+      <div class="cm"><div class="cml">Slug</div><div style="font-size:11px;color:var(--c)">${t.slug}</div></div>
+      <div class="cm"><div class="cml">Plan</div><div><span class="tag ${t.plan}">${t.plan}</span></div></div>
+      <div class="cm"><div class="cml">Status</div><div><span class="tag ${t.status}">${t.status}</span></div></div>
+      <div class="cm"><div class="cml">Rate Limit</div><div style="font-size:11px">${fmt(t.rate_limit)}/min</div></div>
+      <div class="cm"><div class="cml">Users</div><div style="font-size:11px">${t.user_count||0}/${t.max_users}</div></div>
+      <div class="cm"><div class="cml">Region</div><div style="font-size:11px">${t.region}</div></div>
+    </div>
+    <div class="cml">Schema: <span style="color:var(--c)">${t.db_schema}</span></div>`,
+    `<button class="btn" onclick="closeMo()">Close</button>${t.status!=='suspended'?`<button class="btn danger" onclick="closeMo();suspendTenant('${id}')">Suspend</button>`:`<button class="btn success" onclick="closeMo();reactivateTenant('${id}')">Reactivate</button>`}`
+  );
+}
+
+async function suspendTenant(id) {
+  await api(`/tenants/${id}/suspend`, { method: 'POST' });
+  toast('Tenant suspended', 'w'); go(S.cur);
+}
+async function reactivateTenant(id) {
+  await api(`/tenants/${id}/reactivate`, { method: 'POST' });
+  toast('Tenant reactivated', 's'); go(S.cur);
+}
+
+function openNewTenant() {
+  openMo('Provision New Tenant', `
+    <div class="fl"><label>Slug (unique ID)</label><input class="fi" id="nt-slug" placeholder="my-company"></div>
+    <div class="fl"><label>Name</label><input class="fi" id="nt-name" placeholder="My Company"></div>
+    <div class="fl"><label>Plan</label><select class="fs" id="nt-plan"><option value="trial">Trial (Free)</option><option value="pro">Pro ($49/mo)</option><option value="enterprise">Enterprise ($299/mo)</option></select></div>
+    <div class="fl"><label>Region</label><select class="fs" id="nt-region"><option>us-east-1</option><option>eu-west-1</option><option>ap-south-1</option><option>us-west-2</option></select></div>`,
+    `<button class="btn" onclick="closeMo()">Cancel</button><button class="btn pr" onclick="createTenant()">Provision</button>`
+  );
+}
+async function createTenant() {
+  const slug = document.getElementById('nt-slug')?.value?.trim().toLowerCase().replace(/\s+/g,'-');
+  const name = document.getElementById('nt-name')?.value?.trim();
+  if (!slug || !name) return toast('Slug and name required', 'w');
+  try {
+    await api('/tenants', { method: 'POST', body: JSON.stringify({ slug, name, plan: document.getElementById('nt-plan')?.value, region: document.getElementById('nt-region')?.value }) });
+    toast(`"${name}" provisioned ✓`, 's'); closeMo(); loadTenants(); go('tenants');
+  } catch (e) { toast(e.message, 'e'); }
+}
+
+function openInviteUser() {
+  openMo('Invite User', `
+    <div class="fl"><label>Email</label><input class="fi" id="nu-email" type="email" placeholder="user@company.com"></div>
+    <div class="fl"><label>First Name</label><input class="fi" id="nu-first" placeholder="Alice"></div>
+    <div class="fl"><label>Last Name</label><input class="fi" id="nu-last" placeholder="Johnson"></div>
+    <div class="fl"><label>Password</label><input class="fi" id="nu-pass" type="password" placeholder="Min 8 chars, uppercase + number"></div>
+    <div class="fl"><label>Role</label><select class="fs" id="nu-role"><option value="viewer">Viewer</option><option value="analyst">Analyst</option><option value="developer">Developer</option><option value="admin">Admin</option></select></div>`,
+    `<button class="btn" onclick="closeMo()">Cancel</button><button class="btn pr" onclick="inviteUser()">Invite</button>`
+  );
+}
+async function inviteUser() {
+  const email = document.getElementById('nu-email')?.value?.trim();
+  const pass  = document.getElementById('nu-pass')?.value;
+  if (!email || !pass) return toast('Email and password required', 'w');
+  try {
+    await api('/auth/register', { method: 'POST', body: JSON.stringify({ email, password: pass, firstName: document.getElementById('nu-first')?.value||'', lastName: document.getElementById('nu-last')?.value||'', role: document.getElementById('nu-role')?.value }) });
+    toast(`${email} invited ✓`, 's'); closeMo(); go('users');
+  } catch (e) { toast(e.message, 'e'); }
+}
+
+function showUser(id, email, role, status) {
+  openMo(`Edit: ${email}`, `
+    <div class="fl"><label>Role</label><select class="fs" id="eu-role"><option value="viewer" ${role==='viewer'?'selected':''}>Viewer</option><option value="analyst" ${role==='analyst'?'selected':''}>Analyst</option><option value="developer" ${role==='developer'?'selected':''}>Developer</option><option value="admin" ${role==='admin'?'selected':''}>Admin</option></select></div>
+    <div class="fl"><label>Status</label><select class="fs" id="eu-status"><option value="active" ${status==='active'?'selected':''}>Active</option><option value="inactive" ${status==='inactive'?'selected':''}>Inactive</option><option value="locked" ${status==='locked'?'selected':''}>Locked</option></select></div>`,
+    `<button class="btn" onclick="closeMo()">Cancel</button><button class="btn pr" onclick="updateUser('${id}')">Save</button>`
+  );
+}
+async function updateUser(id) {
+  try {
+    const role   = document.getElementById('eu-role')?.value;
+    const status = document.getElementById('eu-status')?.value;
+    await api(`/users/${id}/role`,   { method: 'PATCH', body: JSON.stringify({ role }) });
+    await api(`/users/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
+    toast('User updated ✓', 's'); closeMo(); go('users');
+  } catch (e) { toast(e.message, 'e'); }
+}
+async function unlockUser(id) {
+  await api(`/users/${id}/unlock`, { method: 'POST' }); toast('User unlocked ✓', 's'); go('users');
+}
+async function deleteUser(id, email) {
+  if (!confirm(`Delete ${email}?`)) return;
+  await api(`/users/${id}`, { method: 'DELETE' }); toast(`${email} deleted`, 'w'); go('users');
+}
+
+async function retryFailed() {
+  const d = await api('/jobs/retry-failed', { method: 'POST' });
+  toast(`${d.retriedCount} jobs requeued ✓`, 's'); go('jobs');
+}
+async function flushCache() {
+  const d = await api('/cache/flush', { method: 'POST' });
+  toast(`${d.flushedKeys} keys flushed`, 'w'); go('cache');
+}
+async function exportAudit() {
+  try { await api('/audit/export', { method: 'POST', body: '{}' }); toast('Export triggered', 'i'); }
+  catch(e) { toast(e.message,'e'); }
+}
+async function genInvoice() {
+  const month = new Date().toISOString().slice(0,7);
+  try { const d=await api('/billing/invoice',{method:'POST',body:JSON.stringify({month})}); toast(`Invoice ${d.invoice.id} generated ✓`,'s'); }
+  catch(e) { toast(e.message,'e'); }
+}
+
+async function enqueueJob(qName) {
+  openMo(`Enqueue Job: ${qName}`, `
+    <div class="fl"><label>Job Name</label><input class="fi" id="jn" placeholder="process-data"></div>
+    <div class="fl"><label>Priority (0-10)</label><input class="fi" id="jp" type="number" min="0" max="10" value="0"></div>`,
+    `<button class="btn" onclick="closeMo()">Cancel</button><button class="btn pr" onclick="doEnqueue('${qName}')">Enqueue</button>`
+  );
+}
+async function doEnqueue(qName) {
+  const name = document.getElementById('jn')?.value||'manual-job';
+  const priority = parseInt(document.getElementById('jp')?.value||'0');
+  try {
+    const d = await api(`/jobs/queues/${qName}`, { method: 'POST', body: JSON.stringify({ name, data: { triggeredBy: S.user?.email, ts: Date.now() }, priority }) });
+    toast(`Job ${d.job.id.slice(0,8)}… queued ✓`, 's'); closeMo(); setTimeout(()=>go('jobs'), 500);
+  } catch (e) { toast(e.message, 'e'); }
+}
+
+function openNewWebhook() {
+  openMo('Register Webhook', `
+    <div class="fl"><label>Endpoint URL</label><input class="fi" id="wh-url" placeholder="https://your-server.com/webhooks"></div>
+    <div class="fl"><label>Events (comma-separated or *)</label><input class="fi" id="wh-ev" placeholder="auth.login,user.created"></div>`,
+    `<button class="btn" onclick="closeMo()">Cancel</button><button class="btn pr" onclick="createWebhook()">Register</button>`
+  );
+}
+async function createWebhook() {
+  const url = document.getElementById('wh-url')?.value?.trim();
+  const evs = document.getElementById('wh-ev')?.value?.split(',').map(e=>e.trim()).filter(Boolean);
+  if (!url || !evs?.length) return toast('URL and events required', 'w');
+  try {
+    const d = await api('/webhooks', { method: 'POST', body: JSON.stringify({ url, events: evs }) });
+    toast(`Endpoint registered. Secret: ${d.endpoint.secret?.slice(0,20)}…`, 's');
+    closeMo(); go('webhooks');
+  } catch (e) { toast(e.message, 'e'); }
+}
+async function testWebhook(id) {
+  await api(`/webhooks/${id}/test`, { method: 'POST' });
+  toast('Test payload dispatched ✓', 's');
+}
+async function deleteWebhook(id) {
+  await api(`/webhooks/${id}`, { method: 'DELETE' });
+  toast('Webhook deleted', 'w'); go('webhooks');
+}
+
+function openNewApiKey() {
+  openMo('Create API Key', `
+    <div class="fl"><label>Name</label><input class="fi" id="ak-name" placeholder="CI/CD Pipeline"></div>
+    <div class="fl"><label>Scopes (comma-separated)</label><input class="fi" id="ak-scopes" placeholder="jobs:manage,cache:read"></div>`,
+    `<button class="btn" onclick="closeMo()">Cancel</button><button class="btn pr" onclick="createApiKey()">Create</button>`
+  );
+}
+async function createApiKey() {
+  const name = document.getElementById('ak-name')?.value?.trim();
+  const scopes = document.getElementById('ak-scopes')?.value?.split(',').map(s=>s.trim()).filter(Boolean);
+  if (!name) return toast('Name required', 'w');
+  try {
+    const d = await api('/api-keys', { method: 'POST', body: JSON.stringify({ name, permissions: scopes||[] }) });
+    openMo('API Key Created', `
+      <div style="background:var(--s2);border:1px solid var(--b1);border-radius:6px;padding:12px;font-family:var(--font);font-size:11px;word-break:break-all;color:var(--c);margin-bottom:12px">${d.key.key}</div>
+      <div style="font-size:10px;color:var(--r)">⚠ Copy this key now — it will not be shown again.</div>`,
+      `<button class="btn pr" onclick="navigator.clipboard.writeText('${d.key.key}').then(()=>toast('Copied!','s'));closeMo();go('apikeys')">Copy & Close</button>`
+    );
+  } catch (e) { toast(e.message, 'e'); }
+}
+async function rotateKey(id) {
+  if (!confirm('Rotate this key? The old key will be immediately revoked.')) return;
+  try {
+    const d = await api(`/api-keys/${id}/rotate`, { method: 'POST' });
+    openMo('Key Rotated', `
+      <div style="background:var(--s2);border:1px solid var(--b1);border-radius:6px;padding:12px;font-family:var(--font);font-size:11px;word-break:break-all;color:var(--c);margin-bottom:12px">${d.key.key}</div>
+      <div style="font-size:10px;color:var(--r)">⚠ Save this key — it will not be shown again.</div>`,
+      `<button class="btn pr" onclick="navigator.clipboard.writeText('${d.key.key}').then(()=>toast('Copied!','s'));closeMo();go('apikeys')">Copy & Close</button>`
+    );
+  } catch (e) { toast(e.message, 'e'); }
+}
+async function revokeKey(id) {
+  await api(`/api-keys/${id}`, { method: 'DELETE' });
+  toast('API key revoked', 'w'); go('apikeys');
+}
+
+function openRbacCheck() {
+  openMo('Check Permission', `
+    <div class="fl"><label>Role</label><select class="fs" id="rc-role"><option>superadmin</option><option>admin</option><option>developer</option><option>analyst</option><option>viewer</option></select></div>
+    <div class="fl"><label>Resource</label><input class="fi" id="rc-res" placeholder="tenants"></div>
+    <div class="fl"><label>Action</label><input class="fi" id="rc-act" placeholder="delete"></div>`,
+    `<button class="btn" onclick="closeMo()">Cancel</button><button class="btn pr" onclick="checkPerm()">Check</button>`
+  );
+}
+async function checkPerm() {
+  const role=document.getElementById('rc-role')?.value, res=document.getElementById('rc-res')?.value, act=document.getElementById('rc-act')?.value;
+  const d = await api(`/rbac/check?resource=${res}&action=${act}`);
+  toast(`${role} → ${res}:${act}: ${d.allowed?'✓ ALLOWED':'✗ DENIED'}`, d.allowed?'s':'e');
+}
+
+function openChangePass() {
+  openMo('Change Password', `
+    <div class="fl"><label>Current Password</label><input class="fi" id="cp-cur" type="password"></div>
+    <div class="fl"><label>New Password</label><input class="fi" id="cp-new" type="password" placeholder="Min 8 chars, uppercase + number"></div>`,
+    `<button class="btn" onclick="closeMo()">Cancel</button><button class="btn pr" onclick="changePass()">Change</button>`
+  );
+}
+async function changePass() {
+  const cur=document.getElementById('cp-cur')?.value, nw=document.getElementById('cp-new')?.value;
+  if (!cur||!nw) return toast('Both fields required','w');
+  try {
+    await api('/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword: cur, newPassword: nw }) });
+    toast('Password changed. Please log in again.','s'); closeMo(); setTimeout(logout, 1500);
+  } catch(e) { toast(e.message,'e'); }
+}
+
+function setupMFA() {
+  openMo('Enable MFA', `<div style="color:var(--m);font-size:11px;margin-bottom:14px">After clicking Setup, you will receive a QR code to scan with Google Authenticator or Authy.</div>`,
+    `<button class="btn" onclick="closeMo()">Cancel</button><button class="btn pr" onclick="doSetupMFA()">Setup MFA</button>`
+  );
+}
+async function doSetupMFA() {
+  try {
+    const d = await api('/auth/mfa/setup', { method: 'POST' });
+    document.getElementById('mbody').innerHTML = `
+      <div style="text-align:center;margin-bottom:14px">
+        <img src="${d.qrCodeUrl}" style="border-radius:8px;border:2px solid var(--b2)" width="160" height="160" alt="QR Code">
+      </div>
+      <div style="font-size:10px;color:var(--m);margin-bottom:12px">Secret: <span style="color:var(--c);font-family:var(--font)">${d.secret}</span></div>
+      <div class="fl"><label>Enter 6-digit code from app</label><input class="fi" id="mfa-code" placeholder="123456" maxlength="6"></div>`;
+    document.getElementById('mfoot').innerHTML = `<button class="btn" onclick="closeMo()">Cancel</button><button class="btn pr" onclick="confirmMFA()">Activate</button>`;
+  } catch(e) { toast(e.message,'e'); }
+}
+async function confirmMFA() {
+  const code = document.getElementById('mfa-code')?.value?.trim();
+  if (!code) return toast('Enter the 6-digit code','w');
+  try {
+    const d = await api('/auth/mfa/confirm', { method: 'POST', body: JSON.stringify({ code }) });
+    closeMo();
+    openMo('MFA Enabled ✓', `
+      <div style="color:var(--g);margin-bottom:12px">MFA is now active on your account.</div>
+      <div style="font-size:11px;color:var(--m);margin-bottom:10px">Backup codes (save these securely):</div>
+      <div style="background:var(--s2);border:1px solid var(--b1);border-radius:6px;padding:12px;font-family:var(--font);font-size:11px;color:var(--c)">${(d.backupCodes||[]).join('<br>')}</div>`,
+      `<button class="btn pr" onclick="closeMo();go('profile')">Done</button>`
+    );
+  } catch(e) { toast(e.message,'e'); }
+}
+
+async function logoutAll() {
+  const d = await api('/auth/logout-all', { method: 'POST' });
+  toast(`${d.sessionsRevoked} sessions terminated`, 'w');
+  setTimeout(logout, 1500);
+}
+
+// ════════════════════════════════════════
+// MODAL + TOAST
+// ════════════════════════════════════════
+function openMo(title, body, foot) {
+  document.getElementById('mtitle').textContent = title;
+  document.getElementById('mbody').innerHTML = body;
+  document.getElementById('mfoot').innerHTML = foot;
+  document.getElementById('mo').classList.add('open');
+}
+function closeMo() { document.getElementById('mo').classList.remove('open'); }
+document.getElementById('mo').addEventListener('click', e => { if (e.target === document.getElementById('mo')) closeMo(); });
+
+function toast(msg, type = 's') {
+  const c = { s:'var(--g)', w:'var(--a)', e:'var(--r)', i:'var(--c)' };
+  const ic = { s:'✓', w:'⚠', e:'✕', i:'ℹ' };
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span style="color:${c[type]||c.i}">${ic[type]||'•'}</span>${msg}`;
+  document.getElementById('ts').appendChild(el);
+  setTimeout(() => { el.style.animation = 'slideOut .2s ease forwards'; setTimeout(() => el.remove(), 200); }, 3500);
+}
+
+// Keyboard shortcut: Escape closes modal
+document.addEve
